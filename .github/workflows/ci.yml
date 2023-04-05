@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-win-x64:
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -20,14 +20,38 @@ jobs:
       - name: Build Project
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          New-Item -ItemType directory -Path build
           cmake -S . -B build
           cmake --build build/ --config Release -j
+          mkdir lib/
+          mv build/Release/nbsparser.lib lib/nbsparser.lib
 
       - name: Upload build files
         uses: actions/upload-artifact@v3
         with:
-          name: artifact
+          name: nbsparser-win-x64
           path: |
             ./include
-            ./build/Release
+            ./lib
+
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+          
+      - name: Build Project
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        run: |
+          sudo apt install cmake -y
+          cmake -S . -B build
+          cmake --build build/ --config Release -j
+          mkdir lib/
+          mv build/libnbsparser.a lib/libnbsparser.a
+
+      - name: Upload build files
+        uses: actions/upload-artifact@v3
+        with:
+          name: nbsparser-linux-x64
+          path: |
+            ./include
+            ./lib
