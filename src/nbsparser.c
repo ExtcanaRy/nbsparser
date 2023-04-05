@@ -1,17 +1,18 @@
+#pragma warning(disable:4996)
 #include <nbsparser/nbsparser.h>
 
 #define ushort unsigned short
 #define uint unsigned int
 #define uchar unsigned char
 
-char *nbs_read_string(FILE *fp)
+const char *nbs_read_string(FILE *fp)
 {
     uint str_len;
     char buffer[256];
     fread(&str_len, sizeof(uint), 1, fp);
-    fread_s(buffer, str_len, sizeof(char), str_len, fp);
+    fread(buffer, sizeof(char), str_len, fp);
     buffer[str_len] = '\0';
-    return _strdup(buffer);
+    return strdup(buffer);
 }
 
 struct nbs_header *nbs_parse_header(FILE *fp)
@@ -131,7 +132,7 @@ struct nbs_layers *nbs_parse_layers(FILE *fp, unsigned short layers_count, unsig
     struct nbs_layers *head = NULL;
     struct nbs_layers *tail = NULL;
 
-    char *name;
+    const char *name;
     uchar lock;
     uchar volume;
     uchar panning;
@@ -169,8 +170,8 @@ struct nbs_instruments *nbs_parse_instruments(FILE *fp, unsigned short layers_co
     struct nbs_instruments *head = NULL;
     struct nbs_instruments *tail = NULL;
 
-    char *name;
-    char *sound_file;
+    const char *name;
+    const char *sound_file;
     uchar pitch;
     uchar press_key;
 
