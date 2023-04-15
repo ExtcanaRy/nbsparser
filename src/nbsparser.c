@@ -23,10 +23,6 @@ struct nbs_header *nbs_parse_header(FILE *fp)
 
     ushort song_length = 0;
     ushort tempo = 0;
-    uchar auto_save = 0;
-    uchar loop = 0;
-    uchar max_loop_count = 0;
-    ushort loop_start = 0;
 
     fread(&song_length, sizeof(ushort), 1, fp);
     if (song_length == 0)
@@ -34,15 +30,26 @@ struct nbs_header *nbs_parse_header(FILE *fp)
     else
         header->version = 0;
 
-    fread(&header->default_instruments, sizeof(uchar), 1, fp);
-    fread(&header->song_length, sizeof(ushort), 1, fp);
+    if (header->version > 0)
+        fread(&header->default_instruments, sizeof(uchar), 1, fp);
+    else
+        header->default_instruments = 10;
+    
+    if (header->version >= 3)
+        fread(&header->song_length, sizeof(ushort), 1, fp);
+    else
+        header->song_length = song_length;
+
     fread(&header->song_layers, sizeof(ushort), 1, fp);
     header->song_name = nbs_read_string(fp);
     header->song_author = nbs_read_string(fp);
     header->original_author = nbs_read_string(fp);
     header->description = nbs_read_string(fp);
+
     fread(&tempo, sizeof(ushort), 1, fp);
-    fread(&auto_save, sizeof(uchar), 1, fp);
+    header->tempo = (float)tempo / 100.0f;
+
+    fread(&header->auto_save, sizeof(uchar), 1, fp);
     fread(&header->auto_save_duration, sizeof(uchar), 1, fp);
     fread(&header->time_signature, sizeof(uchar), 1, fp);
     fread(&header->minutes_spent, sizeof(uint), 1, fp);
@@ -51,17 +58,21 @@ struct nbs_header *nbs_parse_header(FILE *fp)
     fread(&header->blocks_added, sizeof(uint), 1, fp);
     fread(&header->blocks_removed, sizeof(uint), 1, fp);
     header->song_origin = nbs_read_string(fp);
-    fread(&loop, sizeof(uchar), 1, fp);
-    fread(&max_loop_count, sizeof(uchar), 1, fp);
-    fread(&loop_start, sizeof(ushort), 1, fp);
 
-    header->default_instruments = header->version > 0 ? header->default_instruments : 10;
-    header->song_length = header->version >= 3 ? header->song_length : song_length;
-    header->tempo = (float)tempo / 100.0f;
-    header->auto_save = (bool)auto_save;
-    header->loop = header->version >= 4 ? (bool)loop : false;
-    header->max_loop_count = header->version >= 4 ? max_loop_count : 0;
-    header->loop_start = header->version >= 4 ? loop_start : 0;
+    if (header->version >= 4)
+        fread(&header->loop, sizeof(uchar), 1, fp);
+    else
+        header->loop = false;
+
+    if (header->version >= 4)
+        fread(&header->max_loop_count, sizeof(uchar), 1, fp);
+    else
+        header->max_loop_count = 0;
+
+    if (header->version >= 4)
+        fread(&header->loop_start, sizeof(ushort), 1, fp);
+    else
+        header->loop_start = 0;
 
     return header;
 }
@@ -98,9 +109,23 @@ struct nbs_notes *nbs_parse_notes(FILE *fp, unsigned char version)
 
             fread(&instrument, sizeof(uchar), 1, fp);
             fread(&key, sizeof(uchar), 1, fp);
-            fread(&velocity, sizeof(uchar), 1, fp);
-            fread(&panning, sizeof(uchar), 1, fp);
-            fread(&pitch, sizeof(short), 1, fp);
+
+            if (version >= 4)
+                fread(&velocity, sizeof(uchar), 1, fp);
+            else
+                velocity = 100;
+
+            if (version >= 4) {
+                fread(&panning, sizeof(uchar), 1, fp);
+                panning -= 100;
+            } else {
+                panning = 0;
+            }
+
+            if (version >= 4)
+                fread(&pitch, sizeof(short), 1, fp);
+            else
+                pitch = 0;
 
             struct nbs_notes *new_note = (struct nbs_notes *) malloc(sizeof(struct nbs_notes));
             if (!new_note)
@@ -110,9 +135,9 @@ struct nbs_notes *nbs_parse_notes(FILE *fp, unsigned char version)
             new_note->layer = current_layer;
             new_note->instrument = instrument;
             new_note->key = key;
-            new_note->velocity = version >= 4 ? velocity : 100;
-            new_note->panning = version >= 4 ? panning - 100 : 0;
-            new_note->pitch = version >= 4 ? pitch : 0;
+            new_note->velocity = velocity;
+            new_note->panning = panning;
+            new_note->pitch = pitch;
             new_note->next = NULL;
 
             if (head == NULL) {
@@ -139,9 +164,19 @@ struct nbs_layers *nbs_parse_layers(FILE *fp, unsigned short layers_count, unsig
 
     for (int i = 0; i < layers_count; i++) {
         name = nbs_read_string(fp);
-        fread(&lock, sizeof(uchar), 1, fp);
+        if (version >= 4)
+            fread(&lock, sizeof(uchar), 1, fp);
+        else
+            lock = 0;
+
         fread(&volume, sizeof(uchar), 1, fp);
-        fread(&panning, sizeof(uchar), 1, fp);
+        
+        if (version >= 2) {
+            fread(&panning, sizeof(uchar), 1, fp);
+            panning -= 100;
+        } else {
+            panning = 0;
+        }
 
         struct nbs_layers *new_layer = (struct nbs_layers *) malloc(sizeof(struct nbs_layers));
         if (!new_layer)
@@ -149,9 +184,9 @@ struct nbs_layers *nbs_parse_layers(FILE *fp, unsigned short layers_count, unsig
 
         new_layer->id = i;
         new_layer->name = name;
-        new_layer->lock = version >= 4 ? (bool)lock : false;
+        new_layer->lock = (bool)lock;
         new_layer->volume = volume;
-        new_layer->panning = version >= 2 ? (short)panning - 100 : 0;
+        new_layer->panning = (short)panning;
         new_layer->next = NULL;
 
         if (head == NULL) {
